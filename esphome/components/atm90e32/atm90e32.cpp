@@ -271,7 +271,7 @@ uint16_t ATM90E32Component::read16_(uint16_t a_register) {
   delay_microseconds_safe(1);  // min delay between CS low and first SCK is 200ns - 1ms is plenty
   this->write_byte(addrh);
   this->write_byte(addrl);
-  delay_microseconds_safe(4); // must wait 4ms for data to become valid
+  delay_microseconds_safe(4); // must wait 4µs for data to become valid
   this->read_array(data, 2);
   this->disable();
   delay_microseconds_safe(1);
