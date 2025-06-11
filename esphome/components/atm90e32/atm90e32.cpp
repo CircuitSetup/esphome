@@ -271,8 +271,10 @@ uint16_t ATM90E32Component::read16_(uint16_t a_register) {
   delay_microseconds_safe(1);  // min delay between CS low and first SCK is 200ns - 1ms is plenty
   this->write_byte(addrh);
   this->write_byte(addrl);
+  delay_microseconds_safe(4); // must wait 4ms for data to become valid
   this->read_array(data, 2);
   this->disable();
+  delay_microseconds_safe(1);
 
   output = (uint16_t(data[0] & 0xFF) << 8) | (data[1] & 0xFF);
   ESP_LOGVV(TAG, "read16_ 0x%04" PRIX16 " output 0x%04" PRIX16, a_register, output);
