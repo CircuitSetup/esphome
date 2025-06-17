@@ -18,7 +18,7 @@ class SPIDelegateHw : public SPIDelegate {
     config.clock_speed_hz = static_cast<int>(data_rate);
     config.spics_io_num = -1;
     config.flags = 0;
-    config.queue_size = 1;
+    config.queue_size = 0;
     config.pre_cb = nullptr;
     config.post_cb = nullptr;
     if (bit_order == BIT_ORDER_LSB_FIRST)
