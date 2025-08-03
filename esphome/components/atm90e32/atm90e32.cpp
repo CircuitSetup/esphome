@@ -791,16 +791,16 @@ void ATM90E32Component::check_phase_status() {
       status += "Phase Loss; ";
 
     auto *sensor = this->phase_status_text_sensor_[phase];
-    const char *phase_name = sensor ? sensor->get_name().c_str() : "Unknown Phase";
+    if (sensor == nullptr)
+      continue;
+
     if (!status.empty()) {
       status.pop_back();  // remove space
       status.pop_back();  // remove semicolon
-      ESP_LOGW(TAG, "%s: %s", phase_name, status.c_str());
-      if (sensor != nullptr)
-        sensor->publish_state(status);
+      ESP_LOGW(TAG, "%s: %s", sensor->get_name().c_str(), status.c_str());
+      sensor->publish_state(status);
     } else {
-      if (sensor != nullptr)
-        sensor->publish_state("Okay");
+      sensor->publish_state("Okay");
     }
   }
 }
@@ -817,9 +817,12 @@ void ATM90E32Component::check_freq_status() {
   } else {
     freq_status = "Normal";
   }
-  ESP_LOGW(TAG, "Frequency status: %s", freq_status.c_str());
-
   if (this->freq_status_text_sensor_ != nullptr) {
+    if (freq_status == "Normal") {
+      ESP_LOGD(TAG, "Frequency status: %s", freq_status.c_str());
+    } else {
+      ESP_LOGW(TAG, "Frequency status: %s", freq_status.c_str());
+    }
     this->freq_status_text_sensor_->publish_state(freq_status);
   }
 }
