@@ -231,6 +231,10 @@ class ATM90E32Component : public PollingComponent,
   bool peak_current_signed_{false};
   bool enable_offset_calibration_{false};
   bool enable_gain_calibration_{false};
+  bool restored_offset_calibration_{false};
+  bool restored_power_offset_calibration_{false};
+  bool restored_gain_calibration_{false};
+  bool calibration_message_printed_{false};
 };
 
 }  // namespace atm90e32

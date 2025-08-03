@@ -3,12 +3,27 @@
 #include <cmath>
 #include <numbers>
 #include "esphome/core/log.h"
+#ifdef USE_API
+#include "esphome/components/api/api_server.h"
+#endif
 
 namespace esphome {
 namespace atm90e32 {
 
 static const char *const TAG = "atm90e32";
 void ATM90E32Component::loop() {
+#ifdef USE_API
+  if (!this->calibration_message_printed_ && api::global_api_server != nullptr &&
+      api::global_api_server->is_connected()) {
+    if (this->restored_offset_calibration_)
+      ESP_LOGI(TAG, "[CALIBRATION] Successfully restored offset calibration from memory.");
+    if (this->restored_power_offset_calibration_)
+      ESP_LOGI(TAG, "[CALIBRATION] Successfully restored power offset calibration from memory.");
+    if (this->restored_gain_calibration_)
+      ESP_LOGI(TAG, "[CALIBRATION] Successfully restored gain calibration from memory.");
+    this->calibration_message_printed_ = true;
+  }
+#endif
   if (this->get_publish_interval_flag_()) {
     this->set_publish_interval_flag_(false);
     for (uint8_t phase = 0; phase < 3; phase++) {
@@ -644,6 +659,7 @@ void ATM90E32Component::restore_gain_calibrations_() {
 
     if (this->verify_gain_writes_()) {
       this->using_saved_calibrations_ = true;
+      this->restored_gain_calibration_ = true;
       ESP_LOGI(TAG, "[CALIBRATION] Gain calibration loaded and verified successfully.");
     } else {
       this->using_saved_calibrations_ = false;
@@ -657,6 +673,7 @@ void ATM90E32Component::restore_gain_calibrations_() {
 
 void ATM90E32Component::restore_offset_calibrations_() {
   if (this->offset_pref_.load(&this->offset_phase_)) {
+    this->restored_offset_calibration_ = true;
     ESP_LOGI(TAG, "[CALIBRATION] Successfully restored offset calibration from memory.");
 
     for (uint8_t phase = 0; phase < 3; phase++) {
@@ -672,6 +689,7 @@ void ATM90E32Component::restore_offset_calibrations_() {
 
 void ATM90E32Component::restore_power_offset_calibrations_() {
   if (this->power_offset_pref_.load(&this->power_offset_phase_)) {
+    this->restored_power_offset_calibration_ = true;
     ESP_LOGI(TAG, "[CALIBRATION] Successfully restored power offset calibration from memory.");
 
     for (uint8_t phase = 0; phase < 3; ++phase) {
