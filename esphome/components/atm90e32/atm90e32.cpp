@@ -631,13 +631,23 @@ void ATM90E32Component::write_power_offsets_to_registers_(uint8_t phase, int16_t
 }
 
 void ATM90E32Component::restore_gain_calibrations_() {
+  GainCalibration config_gain_phase[3];
+  for (uint8_t phase = 0; phase < 3; phase++) {
+    config_gain_phase[phase].voltage_gain = this->phase_[phase].voltage_gain_;
+    config_gain_phase[phase].current_gain = this->phase_[phase].ct_gain_;
+  }
+
   if (this->gain_calibration_pref_.load(&this->gain_phase_)) {
     ESP_LOGI(TAG, "[CALIBRATION] Restoring saved gain calibrations to registers:");
 
     for (uint8_t phase = 0; phase < 3; phase++) {
-      uint16_t v_gain = this->gain_phase_[phase].voltage_gain;
-      uint16_t i_gain = this->gain_phase_[phase].current_gain;
-      ESP_LOGI(TAG, "[CALIBRATION]   Phase %c - Voltage Gain: %u, Current Gain: %u", 'A' + phase, v_gain, i_gain);
+      const auto &loaded = this->gain_phase_[phase];
+      const auto &cfg = config_gain_phase[phase];
+      if (loaded.voltage_gain != cfg.voltage_gain || loaded.current_gain != cfg.current_gain) {
+        ESP_LOGW(TAG, "[CALIBRATION] Config and flash values differ for phase %c; using flash value.", 'A' + phase);
+      }
+      ESP_LOGI(TAG, "[CALIBRATION]   Phase %c - Voltage Gain: %u, Current Gain: %u", 'A' + phase, loaded.voltage_gain,
+               loaded.current_gain);
     }
 
     this->write_gains_to_registers_();
@@ -656,11 +666,20 @@ void ATM90E32Component::restore_gain_calibrations_() {
 }
 
 void ATM90E32Component::restore_offset_calibrations_() {
+  OffsetCalibration config_offset_phase[3];
+  for (uint8_t phase = 0; phase < 3; phase++) {
+    config_offset_phase[phase] = this->offset_phase_[phase];
+  }
+
   if (this->offset_pref_.load(&this->offset_phase_)) {
     ESP_LOGI(TAG, "[CALIBRATION] Successfully restored offset calibration from memory.");
 
     for (uint8_t phase = 0; phase < 3; phase++) {
-      auto &offset = this->offset_phase_[phase];
+      const auto &offset = this->offset_phase_[phase];
+      const auto &cfg = config_offset_phase[phase];
+      if (offset.voltage_offset_ != cfg.voltage_offset_ || offset.current_offset_ != cfg.current_offset_) {
+        ESP_LOGW(TAG, "[CALIBRATION] Config and flash values differ for phase %c; using flash value.", 'A' + phase);
+      }
       write_offsets_to_registers_(phase, offset.voltage_offset_, offset.current_offset_);
       ESP_LOGI(TAG, "[CALIBRATION] Phase %c - offset_voltage:: %d, offset_current: %d", 'A' + phase,
                offset.voltage_offset_, offset.current_offset_);
@@ -671,11 +690,21 @@ void ATM90E32Component::restore_offset_calibrations_() {
 }
 
 void ATM90E32Component::restore_power_offset_calibrations_() {
+  PowerOffsetCalibration config_power_offset_phase[3];
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    config_power_offset_phase[phase] = this->power_offset_phase_[phase];
+  }
+
   if (this->power_offset_pref_.load(&this->power_offset_phase_)) {
     ESP_LOGI(TAG, "[CALIBRATION] Successfully restored power offset calibration from memory.");
 
     for (uint8_t phase = 0; phase < 3; ++phase) {
-      auto &offset = this->power_offset_phase_[phase];
+      const auto &offset = this->power_offset_phase_[phase];
+      const auto &cfg = config_power_offset_phase[phase];
+      if (offset.active_power_offset != cfg.active_power_offset ||
+          offset.reactive_power_offset != cfg.reactive_power_offset) {
+        ESP_LOGW(TAG, "[CALIBRATION] Config and flash values differ for phase %c; using flash value.", 'A' + phase);
+      }
       write_power_offsets_to_registers_(phase, offset.active_power_offset, offset.reactive_power_offset);
       ESP_LOGI(TAG, "[CALIBRATION] Phase %c - offset_active_power: %d, offset_reactive_power: %d", 'A' + phase,
                offset.active_power_offset, offset.reactive_power_offset);
