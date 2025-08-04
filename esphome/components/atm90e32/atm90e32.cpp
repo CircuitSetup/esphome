@@ -171,7 +171,6 @@ void ATM90E32Component::setup() {
     this->power_offset_pref_ = global_preferences->make_preference<PowerOffsetCalibration[3]>(po_hash, true);
     this->restore_power_offset_calibrations_();
   } else {
-    ESP_LOGI(TAG, "[CALIBRATION] Power & Voltage/Current offset calibration is disabled. Using config file values.");
     for (uint8_t phase = 0; phase < 3; ++phase) {
       this->write16_(this->voltage_offset_registers[phase],
                      static_cast<uint16_t>(this->offset_phase_[phase].voltage_offset_));
@@ -190,17 +189,13 @@ void ATM90E32Component::setup() {
     this->gain_calibration_pref_ = global_preferences->make_preference<GainCalibration[3]>(g_hash, true);
     this->restore_gain_calibrations_();
 
-    if (this->using_saved_calibrations_) {
-      ESP_LOGI(TAG, "[CALIBRATION] Successfully restored gain calibration from memory.");
-    } else {
+    if (!this->using_saved_calibrations_) {
       for (uint8_t phase = 0; phase < 3; ++phase) {
         this->write16_(voltage_gain_registers[phase], this->phase_[phase].voltage_gain_);
         this->write16_(current_gain_registers[phase], this->phase_[phase].ct_gain_);
       }
     }
   } else {
-    ESP_LOGI(TAG, "[CALIBRATION] Gain calibration is disabled. Using config file values.");
-
     for (uint8_t phase = 0; phase < 3; ++phase) {
       this->write16_(voltage_gain_registers[phase], this->phase_[phase].voltage_gain_);
       this->write16_(current_gain_registers[phase], this->phase_[phase].ct_gain_);
@@ -220,14 +215,17 @@ void ATM90E32Component::setup() {
 
 #ifdef USE_API
   if (this->restored_offset_calibration_ || this->restored_power_offset_calibration_ ||
-      this->restored_gain_calibration_) {
+      this->restored_gain_calibration_ || !this->enable_offset_calibration_ || !this->enable_gain_calibration_) {
     this->set_interval("atm90e32_calibration_log", 1000, [this]() {
 #ifdef USE_WIFI
       if (wifi::global_wifi_component != nullptr && !wifi::global_wifi_component->is_connected())
         return;
 #endif
       if (api::global_api_server != nullptr && api::global_api_server->is_connected()) {
-        if (this->restored_offset_calibration_) {
+        if (!this->enable_offset_calibration_) {
+          ESP_LOGI(TAG,
+                   "[CALIBRATION] Power & Voltage/Current offset calibration is disabled. Using config file values.");
+        } else if (this->restored_offset_calibration_) {
           ESP_LOGI(TAG, "[CALIBRATION] Successfully restored offset calibration from memory.");
           for (uint8_t phase = 0; phase < 3; phase++) {
             auto &offset = this->offset_phase_[phase];
@@ -243,7 +241,9 @@ void ATM90E32Component::setup() {
                      offset.active_power_offset, offset.reactive_power_offset);
           }
         }
-        if (this->restored_gain_calibration_) {
+        if (!this->enable_gain_calibration_) {
+          ESP_LOGI(TAG, "[CALIBRATION] Gain calibration is disabled. Using config file values.");
+        } else if (this->restored_gain_calibration_) {
           ESP_LOGI(TAG, "[CALIBRATION] Restoring saved gain calibrations to registers:");
           for (uint8_t phase = 0; phase < 3; phase++) {
             uint16_t v_gain = this->gain_phase_[phase].voltage_gain;
