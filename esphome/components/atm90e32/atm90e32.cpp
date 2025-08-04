@@ -222,6 +222,34 @@ void ATM90E32Component::setup() {
         return;
 #endif
       if (api::global_api_server != nullptr && api::global_api_server->is_connected()) {
+        for (uint8_t phase = 0; phase < 3; ++phase) {
+          if (this->offset_calibration_mismatch_[phase]) {
+            auto &config = this->config_offset_phase_[phase];
+            auto &flash = this->offset_phase_[phase];
+            ESP_LOGW(TAG,
+                     "[CALIBRATION] Phase %c offset mismatch: config voltage %d/current %d, flash voltage %d/current "
+                     "%d; using flash values.",
+                     'A' + phase, config.voltage_offset_, config.current_offset_, flash.voltage_offset_,
+                     flash.current_offset_);
+          }
+          if (this->power_offset_calibration_mismatch_[phase]) {
+            auto &config = this->config_power_offset_phase_[phase];
+            auto &flash = this->power_offset_phase_[phase];
+            ESP_LOGW(TAG,
+                     "[CALIBRATION] Phase %c power offset mismatch: config active %d/reactive %d, flash active "
+                     "%d/reactive %d; using flash values.",
+                     'A' + phase, config.active_power_offset, config.reactive_power_offset, flash.active_power_offset,
+                     flash.reactive_power_offset);
+          }
+          if (this->gain_calibration_mismatch_[phase]) {
+            auto &config = this->config_gain_phase_[phase];
+            auto &flash = this->gain_phase_[phase];
+            ESP_LOGW(TAG,
+                     "[CALIBRATION] Phase %c gain mismatch: config voltage %u/current %u, flash voltage %u/current %u; "
+                     "using flash values.",
+                     'A' + phase, config.voltage_gain, config.current_gain, flash.voltage_gain, flash.current_gain);
+          }
+        }
         if (!this->enable_offset_calibration_) {
           ESP_LOGI(TAG,
                    "[CALIBRATION] Power & Voltage/Current offset calibration is disabled. Using config file values.");
@@ -678,7 +706,22 @@ void ATM90E32Component::write_power_offsets_to_registers_(uint8_t phase, int16_t
 }
 
 void ATM90E32Component::restore_gain_calibrations_() {
+  for (uint8_t i = 0; i < 3; ++i)
+    this->config_gain_phase_[i] = this->gain_phase_[i];
+
   if (this->gain_calibration_pref_.load(&this->gain_phase_)) {
+    for (uint8_t phase = 0; phase < 3; ++phase) {
+      bool mismatch = false;
+      if (this->has_config_voltage_gain_[phase] &&
+          this->gain_phase_[phase].voltage_gain != this->config_gain_phase_[phase].voltage_gain)
+        mismatch = true;
+      if (this->has_config_current_gain_[phase] &&
+          this->gain_phase_[phase].current_gain != this->config_gain_phase_[phase].current_gain)
+        mismatch = true;
+      if (mismatch)
+        this->gain_calibration_mismatch_[phase] = true;
+    }
+
     this->write_gains_to_registers_();
 
     if (this->verify_gain_writes_()) {
@@ -695,10 +738,22 @@ void ATM90E32Component::restore_gain_calibrations_() {
 }
 
 void ATM90E32Component::restore_offset_calibrations_() {
+  for (uint8_t i = 0; i < 3; ++i)
+    this->config_offset_phase_[i] = this->offset_phase_[i];
+
   if (this->offset_pref_.load(&this->offset_phase_)) {
     this->restored_offset_calibration_ = true;
     for (uint8_t phase = 0; phase < 3; phase++) {
       auto &offset = this->offset_phase_[phase];
+      bool mismatch = false;
+      if (this->has_config_voltage_offset_[phase] &&
+          offset.voltage_offset_ != this->config_offset_phase_[phase].voltage_offset_)
+        mismatch = true;
+      if (this->has_config_current_offset_[phase] &&
+          offset.current_offset_ != this->config_offset_phase_[phase].current_offset_)
+        mismatch = true;
+      if (mismatch)
+        this->offset_calibration_mismatch_[phase] = true;
       write_offsets_to_registers_(phase, offset.voltage_offset_, offset.current_offset_);
     }
   } else {
@@ -707,10 +762,22 @@ void ATM90E32Component::restore_offset_calibrations_() {
 }
 
 void ATM90E32Component::restore_power_offset_calibrations_() {
+  for (uint8_t i = 0; i < 3; ++i)
+    this->config_power_offset_phase_[i] = this->power_offset_phase_[i];
+
   if (this->power_offset_pref_.load(&this->power_offset_phase_)) {
     this->restored_power_offset_calibration_ = true;
     for (uint8_t phase = 0; phase < 3; ++phase) {
       auto &offset = this->power_offset_phase_[phase];
+      bool mismatch = false;
+      if (this->has_config_active_power_offset_[phase] &&
+          offset.active_power_offset != this->config_power_offset_phase_[phase].active_power_offset)
+        mismatch = true;
+      if (this->has_config_reactive_power_offset_[phase] &&
+          offset.reactive_power_offset != this->config_power_offset_phase_[phase].reactive_power_offset)
+        mismatch = true;
+      if (mismatch)
+        this->power_offset_calibration_mismatch_[phase] = true;
       write_power_offsets_to_registers_(phase, offset.active_power_offset, offset.reactive_power_offset);
     }
   } else {
