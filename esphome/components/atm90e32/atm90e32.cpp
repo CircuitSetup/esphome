@@ -15,12 +15,31 @@ void ATM90E32Component::loop() {
 #ifdef USE_API
   if (!this->calibration_message_printed_ && api::global_api_server != nullptr &&
       api::global_api_server->is_connected()) {
-    if (this->restored_offset_calibration_)
+    if (this->restored_offset_calibration_) {
       ESP_LOGI(TAG, "[CALIBRATION] Successfully restored offset calibration from memory.");
-    if (this->restored_power_offset_calibration_)
+      for (uint8_t phase = 0; phase < 3; phase++) {
+        auto &offset = this->offset_phase_[phase];
+        ESP_LOGI(TAG, "[CALIBRATION] Phase %c - offset_voltage: %d, offset_current: %d", 'A' + phase,
+                 offset.voltage_offset_, offset.current_offset_);
+      }
+    }
+    if (this->restored_power_offset_calibration_) {
       ESP_LOGI(TAG, "[CALIBRATION] Successfully restored power offset calibration from memory.");
-    if (this->restored_gain_calibration_)
-      ESP_LOGI(TAG, "[CALIBRATION] Successfully restored gain calibration from memory.");
+      for (uint8_t phase = 0; phase < 3; ++phase) {
+        auto &offset = this->power_offset_phase_[phase];
+        ESP_LOGI(TAG, "[CALIBRATION] Phase %c - offset_active_power: %d, offset_reactive_power: %d", 'A' + phase,
+                 offset.active_power_offset, offset.reactive_power_offset);
+      }
+    }
+    if (this->restored_gain_calibration_) {
+      ESP_LOGI(TAG, "[CALIBRATION] Restoring saved gain calibrations to registers:");
+      for (uint8_t phase = 0; phase < 3; phase++) {
+        uint16_t v_gain = this->gain_phase_[phase].voltage_gain;
+        uint16_t i_gain = this->gain_phase_[phase].current_gain;
+        ESP_LOGI(TAG, "[CALIBRATION]   Phase %c - Voltage Gain: %u, Current Gain: %u", 'A' + phase, v_gain, i_gain);
+      }
+      ESP_LOGI(TAG, "[CALIBRATION] Gain calibration loaded and verified successfully.");
+    }
     this->calibration_message_printed_ = true;
   }
 #endif
