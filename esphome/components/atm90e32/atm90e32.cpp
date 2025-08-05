@@ -343,11 +343,13 @@ uint16_t ATM90E32Component::read16_(uint16_t a_register) {
   uint8_t data[2];
   uint16_t output;
   this->enable();
-  delay_microseconds_safe(1);  // min delay between CS low and first SCK is 200ns - 1ms is plenty
+  delay_microseconds_safe(1);  // min delay between CS low and first SCK is 200ns - 1us is plenty
   this->write_byte(addrh);
   this->write_byte(addrl);
   this->read_array(data, 2);
+  delay_microseconds_safe(1);  // allow the last clock to propagate before releasing CS
   this->disable();
+  delay_microseconds_safe(1);  // meet minimum CS high time before next transaction
 
   output = (uint16_t(data[0] & 0xFF) << 8) | (data[1] & 0xFF);
   ESP_LOGVV(TAG, "read16_ 0x%04" PRIX16 " output 0x%04" PRIX16, a_register, output);
@@ -370,9 +372,12 @@ int ATM90E32Component::read32_(uint16_t addr_h, uint16_t addr_l) {
 void ATM90E32Component::write16_(uint16_t a_register, uint16_t val) {
   ESP_LOGVV(TAG, "write16_ 0x%04" PRIX16 " val 0x%04" PRIX16, a_register, val);
   this->enable();
+  delay_microseconds_safe(1);  // ensure CS setup time
   this->write_byte16(a_register);
   this->write_byte16(val);
+  delay_microseconds_safe(1);  // allow clock to settle before raising CS
   this->disable();
+  delay_microseconds_safe(1);  // ensure minimum CS high time
   this->validate_spi_read_(val, "write16()");
 }
 
