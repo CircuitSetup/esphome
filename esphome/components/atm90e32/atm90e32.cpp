@@ -781,14 +781,17 @@ void ATM90E32Component::restore_gain_calibrations_() {
 
   if (this->gain_calibration_pref_.load(&this->gain_phase_)) {
     bool all_zero = true;
+    bool same_as_config = true;
     for (uint8_t phase = 0; phase < 3; ++phase) {
-      if (this->gain_phase_[phase].voltage_gain != 0 || this->gain_phase_[phase].current_gain != 0) {
+      const auto &cfg = this->config_gain_phase_[phase];
+      const auto &saved = this->gain_phase_[phase];
+      if (saved.voltage_gain != 0 || saved.current_gain != 0)
         all_zero = false;
-        break;
-      }
+      if (saved.voltage_gain != cfg.voltage_gain || saved.current_gain != cfg.current_gain)
+        same_as_config = false;
     }
 
-    if (!all_zero) {
+    if (!all_zero && !same_as_config) {
       for (uint8_t phase = 0; phase < 3; ++phase) {
         bool mismatch = false;
         if (this->has_config_voltage_gain_[phase] &&
