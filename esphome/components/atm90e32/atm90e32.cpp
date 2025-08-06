@@ -780,33 +780,46 @@ void ATM90E32Component::restore_gain_calibrations_() {
   }
 
   if (this->gain_calibration_pref_.load(&this->gain_phase_)) {
+    bool all_zero = true;
     for (uint8_t phase = 0; phase < 3; ++phase) {
-      bool mismatch = false;
-      if (this->has_config_voltage_gain_[phase] &&
-          this->gain_phase_[phase].voltage_gain != this->config_gain_phase_[phase].voltage_gain)
-        mismatch = true;
-      if (this->has_config_current_gain_[phase] &&
-          this->gain_phase_[phase].current_gain != this->config_gain_phase_[phase].current_gain)
-        mismatch = true;
-      if (mismatch)
-        this->gain_calibration_mismatch_[phase] = true;
+      if (this->gain_phase_[phase].voltage_gain != 0 || this->gain_phase_[phase].current_gain != 0) {
+        all_zero = false;
+        break;
+      }
     }
 
-    this->write_gains_to_registers_();
+    if (!all_zero) {
+      for (uint8_t phase = 0; phase < 3; ++phase) {
+        bool mismatch = false;
+        if (this->has_config_voltage_gain_[phase] &&
+            this->gain_phase_[phase].voltage_gain != this->config_gain_phase_[phase].voltage_gain)
+          mismatch = true;
+        if (this->has_config_current_gain_[phase] &&
+            this->gain_phase_[phase].current_gain != this->config_gain_phase_[phase].current_gain)
+          mismatch = true;
+        if (mismatch)
+          this->gain_calibration_mismatch_[phase] = true;
+      }
 
-    if (this->verify_gain_writes_()) {
-      this->using_saved_calibrations_ = true;
-      this->restored_gain_calibration_ = true;
-    } else {
+      this->write_gains_to_registers_();
+
+      if (this->verify_gain_writes_()) {
+        this->using_saved_calibrations_ = true;
+        this->restored_gain_calibration_ = true;
+        return;
+      }
+
       this->using_saved_calibrations_ = false;
       ESP_LOGE(TAG, "[CALIBRATION][%s] Gain verification failed! Calibration may not be applied correctly.",
                this->cs_->dump_summary().c_str());
     }
-  } else {
-    this->using_saved_calibrations_ = false;
-    ESP_LOGW(TAG, "[CALIBRATION][%s] No stored gain calibrations found. Using config file values.",
-             this->cs_->dump_summary().c_str());
   }
+
+  this->using_saved_calibrations_ = false;
+  for (uint8_t i = 0; i < 3; ++i)
+    this->gain_phase_[i] = this->config_gain_phase_[i];
+  ESP_LOGW(TAG, "[CALIBRATION][%s] No stored gain calibrations found. Using config file values.",
+           this->cs_->dump_summary().c_str());
 }
 
 void ATM90E32Component::restore_offset_calibrations_() {
