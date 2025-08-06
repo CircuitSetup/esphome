@@ -832,8 +832,8 @@ void ATM90E32Component::restore_offset_calibrations_() {
   bool have_data = this->offset_pref_.load(&this->offset_phase_);
   bool all_zero = true;
   if (have_data) {
-    for (uint8_t phase = 0; phase < 3; phase++) {
-      if (this->offset_phase_[phase].voltage_offset_ != 0 || this->offset_phase_[phase].current_offset_ != 0) {
+    for (auto &phase : this->offset_phase_) {
+      if (phase.voltage_offset_ != 0 || phase.current_offset_ != 0) {
         all_zero = false;
         break;
       }
@@ -861,9 +861,10 @@ void ATM90E32Component::restore_offset_calibrations_() {
              this->cs_->dump_summary().c_str());
   }
 
-  for (uint8_t phase = 0; phase < 3; phase++)
+  for (uint8_t phase = 0; phase < 3; phase++) {
     write_offsets_to_registers_(phase, this->offset_phase_[phase].voltage_offset_,
                                 this->offset_phase_[phase].current_offset_);
+  }
 }
 
 void ATM90E32Component::restore_power_offset_calibrations_() {
@@ -873,9 +874,8 @@ void ATM90E32Component::restore_power_offset_calibrations_() {
   bool have_data = this->power_offset_pref_.load(&this->power_offset_phase_);
   bool all_zero = true;
   if (have_data) {
-    for (uint8_t phase = 0; phase < 3; ++phase) {
-      if (this->power_offset_phase_[phase].active_power_offset != 0 ||
-          this->power_offset_phase_[phase].reactive_power_offset != 0) {
+    for (auto &phase : this->power_offset_phase_) {
+      if (phase.active_power_offset != 0 || phase.reactive_power_offset != 0) {
         all_zero = false;
         break;
       }
@@ -903,9 +903,10 @@ void ATM90E32Component::restore_power_offset_calibrations_() {
              this->cs_->dump_summary().c_str());
   }
 
-  for (uint8_t phase = 0; phase < 3; ++phase)
+  for (uint8_t phase = 0; phase < 3; ++phase) {
     write_power_offsets_to_registers_(phase, this->power_offset_phase_[phase].active_power_offset,
                                       this->power_offset_phase_[phase].reactive_power_offset);
+  }
 }
 
 void ATM90E32Component::clear_gain_calibrations() {
