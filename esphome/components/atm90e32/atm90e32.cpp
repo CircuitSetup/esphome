@@ -618,6 +618,7 @@ void ATM90E32Component::run_gain_calibrations() {
 
 void ATM90E32Component::save_gain_calibration_to_memory_() {
   bool success = this->gain_calibration_pref_.save(&this->gain_phase_);
+  global_preferences->sync();
   if (success) {
     this->using_saved_calibrations_ = true;
     ESP_LOGI(TAG, "[CALIBRATION] Gain calibration saved to memory.");
@@ -644,6 +645,7 @@ void ATM90E32Component::run_offset_calibrations() {
   }
 
   this->offset_pref_.save(&this->offset_phase_);  // Save to flash
+  global_preferences->sync();
 }
 
 void ATM90E32Component::run_power_offset_calibrations() {
@@ -665,6 +667,7 @@ void ATM90E32Component::run_power_offset_calibrations() {
   }
 
   this->power_offset_pref_.save(&this->power_offset_phase_);  // Save to flash
+  global_preferences->sync();
 }
 
 void ATM90E32Component::write_gains_to_registers_() {
@@ -799,6 +802,7 @@ void ATM90E32Component::clear_gain_calibrations() {
   }
 
   bool success = this->gain_calibration_pref_.save(&this->gain_phase_);
+  global_preferences->sync();
   this->using_saved_calibrations_ = false;
 
   if (success) {
@@ -820,6 +824,7 @@ void ATM90E32Component::clear_offset_calibrations() {
   }
 
   this->offset_pref_.save(&this->offset_phase_);  // Save cleared values to flash memory
+  global_preferences->sync();
 
   ESP_LOGI(TAG, "[CALIBRATION] Offsets cleared.");
 }
@@ -830,6 +835,7 @@ void ATM90E32Component::clear_power_offset_calibrations() {
   }
 
   this->power_offset_pref_.save(&this->power_offset_phase_);
+  global_preferences->sync();
 
   ESP_LOGI(TAG, "[CALIBRATION] Power offsets cleared.");
 }
