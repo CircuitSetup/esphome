@@ -41,6 +41,31 @@ static const char *const TAG = "esp32_ble_tracker";
 
 ESP32BLETracker *global_esp32_ble_tracker = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+const char *client_state_to_string(ClientState state) {
+  switch (state) {
+    case ClientState::INIT:
+      return "INIT";
+    case ClientState::DISCONNECTING:
+      return "DISCONNECTING";
+    case ClientState::IDLE:
+      return "IDLE";
+    case ClientState::SEARCHING:
+      return "SEARCHING";
+    case ClientState::DISCOVERED:
+      return "DISCOVERED";
+    case ClientState::READY_TO_CONNECT:
+      return "READY_TO_CONNECT";
+    case ClientState::CONNECTING:
+      return "CONNECTING";
+    case ClientState::CONNECTED:
+      return "CONNECTED";
+    case ClientState::ESTABLISHED:
+      return "ESTABLISHED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 float ESP32BLETracker::get_setup_priority() const { return setup_priority::AFTER_BLUETOOTH; }
 
 void ESP32BLETracker::setup() {
@@ -76,58 +101,17 @@ void ESP32BLETracker::loop() {
       this->start_scan();
     }
   }
-  int connecting = 0;
-  int discovered = 0;
-  int searching = 0;
-  int disconnecting = 0;
-  for (auto *client : this->clients_) {
-    switch (client->state()) {
-      case ClientState::DISCONNECTING:
-        disconnecting++;
-        break;
-      case ClientState::DISCOVERED:
-        discovered++;
-        break;
-      case ClientState::SEARCHING:
-        searching++;
-        break;
-      case ClientState::CONNECTING:
-      case ClientState::READY_TO_CONNECT:
-        connecting++;
-        break;
-      default:
-        break;
-    }
+  ClientStateCounts counts = this->count_client_states_();
+  if (counts != this->client_state_counts_) {
+    this->client_state_counts_ = counts;
+    ESP_LOGD(TAG, "connecting: %d, discovered: %d, searching: %d, disconnecting: %d",
+             this->client_state_counts_.connecting, this->client_state_counts_.discovered,
+             this->client_state_counts_.searching, this->client_state_counts_.disconnecting);
   }
-  if (connecting != connecting_ || discovered != discovered_ || searching != searching_ ||
-      disconnecting != disconnecting_) {
-    connecting_ = connecting;
-    discovered_ = discovered;
-    searching_ = searching;
-    disconnecting_ = disconnecting;
-    ESP_LOGD(TAG, "connecting: %d, discovered: %d, searching: %d, disconnecting: %d", connecting_, discovered_,
-             searching_, disconnecting_);
-  }
-  bool promote_to_connecting = discovered && !searching && !connecting;
 
-  // All scan result processing is now done immediately in gap_scan_event_handler
-  // No ring buffer processing needed here
   if (this->scanner_state_ == ScannerState::FAILED ||
       (this->scan_set_param_failed_ && this->scanner_state_ == ScannerState::RUNNING)) {
-    this->stop_scan_();
-    if (this->scan_start_fail_count_ == std::numeric_limits<uint8_t>::max()) {
-      ESP_LOGE(TAG, "Scan could not restart after %d attempts, rebooting to restore stack (IDF)",
-               std::numeric_limits<uint8_t>::max());
-      App.reboot();
-    }
-    if (this->scan_start_failed_) {
-      ESP_LOGE(TAG, "Scan start failed: %d", this->scan_start_failed_);
-      this->scan_start_failed_ = ESP_BT_STATUS_SUCCESS;
-    }
-    if (this->scan_set_param_failed_) {
-      ESP_LOGE(TAG, "Scan set param failed: %d", this->scan_set_param_failed_);
-      this->scan_set_param_failed_ = ESP_BT_STATUS_SUCCESS;
-    }
+    this->handle_scanner_failure_();
   }
   /*
 
@@ -142,13 +126,12 @@ void ESP32BLETracker::loop() {
     https://github.com/espressif/esp-idf/issues/6688
 
   */
-  if (this->scanner_state_ == ScannerState::IDLE && !connecting && !disconnecting && !promote_to_connecting) {
+  bool promote_to_connecting = counts.discovered && !counts.searching && !counts.connecting;
+
+  if (this->scanner_state_ == ScannerState::IDLE && !counts.connecting && !counts.disconnecting &&
+      !promote_to_connecting) {
 #ifdef USE_ESP32_BLE_SOFTWARE_COEXISTENCE
-    if (this->coex_prefer_ble_) {
-      this->coex_prefer_ble_ = false;
-      ESP_LOGD(TAG, "Setting coexistence preference to balanced.");
-      esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);  // Reset to default
-    }
+    this->update_coex_preference_(false);
 #endif
     if (this->scan_continuous_) {
       this->start_scan_(false);  // first = false
@@ -157,34 +140,12 @@ void ESP32BLETracker::loop() {
   // If there is a discovered client and no connecting
   // clients and no clients using the scanner to search for
   // devices, then promote the discovered client to ready to connect.
-  // Note: Scanning is already stopped by gap_scan_event_handler when
-  // a discovered client is found, so we only need to handle promotion
-  // when the scanner is IDLE.
+  // We check both RUNNING and IDLE states because:
+  // - RUNNING: gap_scan_event_handler initiates stop_scan_() but promotion can happen immediately
+  // - IDLE: Scanner has already stopped (naturally or by gap_scan_event_handler)
   if (promote_to_connecting &&
       (this->scanner_state_ == ScannerState::RUNNING || this->scanner_state_ == ScannerState::IDLE)) {
-    for (auto *client : this->clients_) {
-      if (client->state() == ClientState::DISCOVERED) {
-        if (this->scanner_state_ == ScannerState::RUNNING) {
-          ESP_LOGD(TAG, "Stopping scan to make connection");
-          this->stop_scan_();
-          // Don't wait for scan stop complete - promote immediately.
-          // This is safe because ESP-IDF processes BLE commands sequentially through its internal mailbox queue.
-          // This guarantees that the stop scan command will be fully processed before any subsequent connect command,
-          // preventing race conditions or overlapping operations.
-        }
-
-        ESP_LOGD(TAG, "Promoting client to connect");
-#ifdef USE_ESP32_BLE_SOFTWARE_COEXISTENCE
-        ESP_LOGD(TAG, "Setting coexistence to Bluetooth to make connection.");
-        if (!this->coex_prefer_ble_) {
-          this->coex_prefer_ble_ = true;
-          esp_coex_preference_set(ESP_COEX_PREFER_BT);  // Prioritize Bluetooth
-        }
-#endif
-        client->set_state(ClientState::READY_TO_CONNECT);
-        break;
-      }
-    }
+    this->try_promote_discovered_clients_();
   }
 }
 
@@ -200,13 +161,7 @@ void ESP32BLETracker::ble_before_disabled_event_handler() { this->stop_scan_(); 
 
 void ESP32BLETracker::stop_scan_() {
   if (this->scanner_state_ != ScannerState::RUNNING && this->scanner_state_ != ScannerState::FAILED) {
-    if (this->scanner_state_ == ScannerState::IDLE) {
-      ESP_LOGE(TAG, "Scan is already stopped while trying to stop.");
-    } else if (this->scanner_state_ == ScannerState::STARTING) {
-      ESP_LOGE(TAG, "Scan is starting while trying to stop.");
-    } else if (this->scanner_state_ == ScannerState::STOPPING) {
-      ESP_LOGE(TAG, "Scan is already stopping while trying to stop.");
-    }
+    ESP_LOGE(TAG, "Cannot stop scan: %s", this->scanner_state_to_string_(this->scanner_state_));
     return;
   }
   this->cancel_timeout("scan");
@@ -224,15 +179,7 @@ void ESP32BLETracker::start_scan_(bool first) {
     return;
   }
   if (this->scanner_state_ != ScannerState::IDLE) {
-    if (this->scanner_state_ == ScannerState::STARTING) {
-      ESP_LOGE(TAG, "Cannot start scan while already starting.");
-    } else if (this->scanner_state_ == ScannerState::RUNNING) {
-      ESP_LOGE(TAG, "Cannot start scan while already running.");
-    } else if (this->scanner_state_ == ScannerState::STOPPING) {
-      ESP_LOGE(TAG, "Cannot start scan while already stopping.");
-    } else if (this->scanner_state_ == ScannerState::FAILED) {
-      ESP_LOGE(TAG, "Cannot start scan while already failed.");
-    }
+    this->log_unexpected_state_("start scan", ScannerState::IDLE);
     return;
   }
   this->set_scanner_state_(ScannerState::STARTING);
@@ -241,7 +188,9 @@ void ESP32BLETracker::start_scan_(bool first) {
     for (auto *listener : this->listeners_)
       listener->on_scan_end();
   }
+#ifdef USE_ESP32_BLE_DEVICE
   this->already_discovered_.clear();
+#endif
   this->scan_params_.scan_type = this->scan_active_ ? BLE_SCAN_TYPE_ACTIVE : BLE_SCAN_TYPE_PASSIVE;
   this->scan_params_.own_addr_type = BLE_ADDR_TYPE_PUBLIC;
   this->scan_params_.scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL;
@@ -337,15 +286,7 @@ void ESP32BLETracker::gap_scan_event_handler(const BLEScanResult &scan_result) {
   } else if (scan_result.search_evt == ESP_GAP_SEARCH_INQ_CMPL_EVT) {
     // Scan finished on its own
     if (this->scanner_state_ != ScannerState::RUNNING) {
-      if (this->scanner_state_ == ScannerState::STOPPING) {
-        ESP_LOGE(TAG, "Scan was not running when scan completed.");
-      } else if (this->scanner_state_ == ScannerState::STARTING) {
-        ESP_LOGE(TAG, "Scan was not started when scan completed.");
-      } else if (this->scanner_state_ == ScannerState::FAILED) {
-        ESP_LOGE(TAG, "Scan was in failed state when scan completed.");
-      } else if (this->scanner_state_ == ScannerState::IDLE) {
-        ESP_LOGE(TAG, "Scan was idle when scan completed.");
-      }
+      this->log_unexpected_state_("scan complete", ScannerState::RUNNING);
     }
     // Scan completed naturally, perform cleanup and transition to IDLE
     this->cleanup_scan_state_(false);
@@ -367,15 +308,7 @@ void ESP32BLETracker::gap_scan_start_complete_(const esp_ble_gap_cb_param_t::ble
   ESP_LOGV(TAG, "gap_scan_start_complete - status %d", param.status);
   this->scan_start_failed_ = param.status;
   if (this->scanner_state_ != ScannerState::STARTING) {
-    if (this->scanner_state_ == ScannerState::RUNNING) {
-      ESP_LOGE(TAG, "Scan was already running when start complete.");
-    } else if (this->scanner_state_ == ScannerState::STOPPING) {
-      ESP_LOGE(TAG, "Scan was stopping when start complete.");
-    } else if (this->scanner_state_ == ScannerState::FAILED) {
-      ESP_LOGE(TAG, "Scan was in failed state when start complete.");
-    } else if (this->scanner_state_ == ScannerState::IDLE) {
-      ESP_LOGE(TAG, "Scan was idle when start complete.");
-    }
+    this->log_unexpected_state_("start complete", ScannerState::STARTING);
   }
   if (param.status == ESP_BT_STATUS_SUCCESS) {
     this->scan_start_fail_count_ = 0;
@@ -393,15 +326,7 @@ void ESP32BLETracker::gap_scan_stop_complete_(const esp_ble_gap_cb_param_t::ble_
   // This allows us to safely transition to IDLE state and perform cleanup without race conditions
   ESP_LOGV(TAG, "gap_scan_stop_complete - status %d", param.status);
   if (this->scanner_state_ != ScannerState::STOPPING) {
-    if (this->scanner_state_ == ScannerState::RUNNING) {
-      ESP_LOGE(TAG, "Scan was not running when stop complete.");
-    } else if (this->scanner_state_ == ScannerState::STARTING) {
-      ESP_LOGE(TAG, "Scan was not started when stop complete.");
-    } else if (this->scanner_state_ == ScannerState::FAILED) {
-      ESP_LOGE(TAG, "Scan was in failed state when stop complete.");
-    } else if (this->scanner_state_ == ScannerState::IDLE) {
-      ESP_LOGE(TAG, "Scan was idle when stop complete.");
-    }
+    this->log_unexpected_state_("stop complete", ScannerState::STOPPING);
   }
 
   // Perform cleanup and transition to IDLE
@@ -682,25 +607,10 @@ void ESP32BLETracker::dump_config() {
                 "  Continuous Scanning: %s",
                 this->scan_duration_, this->scan_interval_ * 0.625f, this->scan_window_ * 0.625f,
                 this->scan_active_ ? "ACTIVE" : "PASSIVE", YESNO(this->scan_continuous_));
-  switch (this->scanner_state_) {
-    case ScannerState::IDLE:
-      ESP_LOGCONFIG(TAG, "  Scanner State: IDLE");
-      break;
-    case ScannerState::STARTING:
-      ESP_LOGCONFIG(TAG, "  Scanner State: STARTING");
-      break;
-    case ScannerState::RUNNING:
-      ESP_LOGCONFIG(TAG, "  Scanner State: RUNNING");
-      break;
-    case ScannerState::STOPPING:
-      ESP_LOGCONFIG(TAG, "  Scanner State: STOPPING");
-      break;
-    case ScannerState::FAILED:
-      ESP_LOGCONFIG(TAG, "  Scanner State: FAILED");
-      break;
-  }
-  ESP_LOGCONFIG(TAG, "  Connecting: %d, discovered: %d, searching: %d, disconnecting: %d", connecting_, discovered_,
-                searching_, disconnecting_);
+  ESP_LOGCONFIG(TAG, "  Scanner State: %s", this->scanner_state_to_string_(this->scanner_state_));
+  ESP_LOGCONFIG(TAG, "  Connecting: %d, discovered: %d, searching: %d, disconnecting: %d",
+                this->client_state_counts_.connecting, this->client_state_counts_.discovered,
+                this->client_state_counts_.searching, this->client_state_counts_.disconnecting);
   if (this->scan_start_fail_count_) {
     ESP_LOGCONFIG(TAG, "  Scan Start Fail Count: %d", this->scan_start_fail_count_);
   }
@@ -839,7 +749,9 @@ bool ESP32BLETracker::process_scan_result_(const BLEScanResult &scan_result) {
 
 void ESP32BLETracker::cleanup_scan_state_(bool is_stop_complete) {
   ESP_LOGD(TAG, "Scan %scomplete, set scanner state to IDLE.", is_stop_complete ? "stop " : "");
+#ifdef USE_ESP32_BLE_DEVICE
   this->already_discovered_.clear();
+#endif
   this->cancel_timeout("scan");
 
   for (auto *listener : this->listeners_)
@@ -847,6 +759,84 @@ void ESP32BLETracker::cleanup_scan_state_(bool is_stop_complete) {
 
   this->set_scanner_state_(ScannerState::IDLE);
 }
+
+void ESP32BLETracker::handle_scanner_failure_() {
+  this->stop_scan_();
+  if (this->scan_start_fail_count_ == std::numeric_limits<uint8_t>::max()) {
+    ESP_LOGE(TAG, "Scan could not restart after %d attempts, rebooting to restore stack (IDF)",
+             std::numeric_limits<uint8_t>::max());
+    App.reboot();
+  }
+  if (this->scan_start_failed_) {
+    ESP_LOGE(TAG, "Scan start failed: %d", this->scan_start_failed_);
+    this->scan_start_failed_ = ESP_BT_STATUS_SUCCESS;
+  }
+  if (this->scan_set_param_failed_) {
+    ESP_LOGE(TAG, "Scan set param failed: %d", this->scan_set_param_failed_);
+    this->scan_set_param_failed_ = ESP_BT_STATUS_SUCCESS;
+  }
+}
+
+void ESP32BLETracker::try_promote_discovered_clients_() {
+  // Only promote the first discovered client to avoid multiple simultaneous connections
+  for (auto *client : this->clients_) {
+    if (client->state() != ClientState::DISCOVERED) {
+      continue;
+    }
+
+    if (this->scanner_state_ == ScannerState::RUNNING) {
+      ESP_LOGD(TAG, "Stopping scan to make connection");
+      this->stop_scan_();
+      // Don't wait for scan stop complete - promote immediately.
+      // This is safe because ESP-IDF processes BLE commands sequentially through its internal mailbox queue.
+      // This guarantees that the stop scan command will be fully processed before any subsequent connect command,
+      // preventing race conditions or overlapping operations.
+    }
+
+    ESP_LOGD(TAG, "Promoting client to connect");
+#ifdef USE_ESP32_BLE_SOFTWARE_COEXISTENCE
+    this->update_coex_preference_(true);
+#endif
+    client->set_state(ClientState::READY_TO_CONNECT);
+    break;
+  }
+}
+
+const char *ESP32BLETracker::scanner_state_to_string_(ScannerState state) const {
+  switch (state) {
+    case ScannerState::IDLE:
+      return "IDLE";
+    case ScannerState::STARTING:
+      return "STARTING";
+    case ScannerState::RUNNING:
+      return "RUNNING";
+    case ScannerState::STOPPING:
+      return "STOPPING";
+    case ScannerState::FAILED:
+      return "FAILED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+void ESP32BLETracker::log_unexpected_state_(const char *operation, ScannerState expected_state) const {
+  ESP_LOGE(TAG, "Unexpected state: %s on %s, expected: %s", this->scanner_state_to_string_(this->scanner_state_),
+           operation, this->scanner_state_to_string_(expected_state));
+}
+
+#ifdef USE_ESP32_BLE_SOFTWARE_COEXISTENCE
+void ESP32BLETracker::update_coex_preference_(bool force_ble) {
+  if (force_ble && !this->coex_prefer_ble_) {
+    ESP_LOGD(TAG, "Setting coexistence to Bluetooth to make connection.");
+    this->coex_prefer_ble_ = true;
+    esp_coex_preference_set(ESP_COEX_PREFER_BT);  // Prioritize Bluetooth
+  } else if (!force_ble && this->coex_prefer_ble_) {
+    ESP_LOGD(TAG, "Setting coexistence preference to balanced.");
+    this->coex_prefer_ble_ = false;
+    esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);  // Reset to default
+  }
+}
+#endif
 
 }  // namespace esphome::esp32_ble_tracker
 
