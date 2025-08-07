@@ -822,6 +822,8 @@ void ATM90E32Component::restore_gain_calibrations_() {
   this->using_saved_calibrations_ = false;
   for (uint8_t i = 0; i < 3; ++i)
     this->gain_phase_[i] = this->config_gain_phase_[i];
+  this->write_gains_to_registers_();
+
   ESP_LOGW(TAG, "[CALIBRATION][%s] No stored gain calibrations found. Using config file values.",
            this->cs_->dump_summary().c_str());
 }
@@ -911,27 +913,43 @@ void ATM90E32Component::restore_power_offset_calibrations_() {
 }
 
 void ATM90E32Component::clear_gain_calibrations() {
+  if (!this->using_saved_calibrations_) {
+    ESP_LOGI(TAG, "[CALIBRATION][%s] No stored gain calibrations to clear. Current values:",
+             this->cs_->dump_summary().c_str());
+    for (int phase = 0; phase < 3; phase++) {
+      ESP_LOGI(TAG, "[CALIBRATION][%s]   Phase %c - Voltage Gain: %u, Current Gain: %u",
+               this->cs_->dump_summary().c_str(), 'A' + phase, this->gain_phase_[phase].voltage_gain,
+               this->gain_phase_[phase].current_gain);
+    }
+    return;
+  }
+
   ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored gain calibrations and restoring config-defined values",
            this->cs_->dump_summary().c_str());
 
   for (int phase = 0; phase < 3; phase++) {
-    gain_phase_[phase].voltage_gain = this->phase_[phase].voltage_gain_;
-    gain_phase_[phase].current_gain = this->phase_[phase].ct_gain_;
+    uint16_t voltage_gain = this->phase_[phase].voltage_gain_;
+    uint16_t current_gain = this->phase_[phase].ct_gain_;
+
+    this->config_gain_phase_[phase].voltage_gain = voltage_gain;
+    this->config_gain_phase_[phase].current_gain = current_gain;
+    this->gain_phase_[phase].voltage_gain = voltage_gain;
+    this->gain_phase_[phase].current_gain = current_gain;
+
+    ESP_LOGI(TAG, "[CALIBRATION][%s]   Phase %c - Voltage Gain: %u, Current Gain: %u",
+             this->cs_->dump_summary().c_str(), 'A' + phase, voltage_gain, current_gain);
   }
 
-  bool success = this->gain_calibration_pref_.save(&this->gain_phase_);
+  GainCalibration zero_gains[3]{{0, 0}, {0, 0}, {0, 0}};
+  bool success = this->gain_calibration_pref_.save(&zero_gains);
   global_preferences->sync();
-  this->using_saved_calibrations_ = false;
 
-  if (success) {
-    ESP_LOGI(TAG,
-             "[CALIBRATION][%s] Gain calibrations cleared. Config values restored:", this->cs_->dump_summary().c_str());
-    for (int phase = 0; phase < 3; phase++) {
-      ESP_LOGI(TAG, "[CALIBRATION][%s]   Phase %c - Voltage Gain: %u, Current Gain: %u",
-               this->cs_->dump_summary().c_str(), 'A' + phase, gain_phase_[phase].voltage_gain,
-               gain_phase_[phase].current_gain);
-    }
-  } else {
+  this->using_saved_calibrations_ = false;
+  this->restored_gain_calibration_ = false;
+  for (bool &phase : this->gain_calibration_mismatch_)
+    phase = false;
+
+  if (!success) {
     ESP_LOGE(TAG, "[CALIBRATION][%s] Failed to clear gain calibrations!", this->cs_->dump_summary().c_str());
   }
 
@@ -939,23 +957,74 @@ void ATM90E32Component::clear_gain_calibrations() {
 }
 
 void ATM90E32Component::clear_offset_calibrations() {
-  for (uint8_t phase = 0; phase < 3; phase++) {
-    this->write_offsets_to_registers_(phase, 0, 0);
+  if (!this->restored_offset_calibration_) {
+    ESP_LOGI(TAG, "[CALIBRATION][%s] No stored offset calibrations to clear. Current values:",
+             this->cs_->dump_summary().c_str());
+    for (uint8_t phase = 0; phase < 3; phase++) {
+      ESP_LOGI(TAG, "[CALIBRATION][%s]   Phase %c - offset_voltage: %d, offset_current: %d",
+               this->cs_->dump_summary().c_str(), 'A' + phase, this->offset_phase_[phase].voltage_offset_,
+               this->offset_phase_[phase].current_offset_);
+    }
+    return;
   }
 
-  this->offset_pref_.save(&this->offset_phase_);  // Save cleared values to flash memory
+  ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored offset calibrations and restoring config-defined values",
+           this->cs_->dump_summary().c_str());
+
+  for (uint8_t phase = 0; phase < 3; phase++) {
+    int16_t voltage_offset =
+        this->has_config_voltage_offset_[phase] ? this->config_offset_phase_[phase].voltage_offset_ : 0;
+    int16_t current_offset =
+        this->has_config_current_offset_[phase] ? this->config_offset_phase_[phase].current_offset_ : 0;
+    this->write_offsets_to_registers_(phase, voltage_offset, current_offset);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Phase %c - offset_voltage: %d, offset_current: %d",
+             this->cs_->dump_summary().c_str(), 'A' + phase, voltage_offset, current_offset);
+  }
+
+  OffsetCalibration zero_offsets[3]{{0, 0}, {0, 0}, {0, 0}};
+  this->offset_pref_.save(&zero_offsets);  // Clear stored values in flash
   global_preferences->sync();
+
+  this->restored_offset_calibration_ = false;
+  for (bool &phase : this->offset_calibration_mismatch_)
+    phase = false;
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] Offsets cleared.", this->cs_->dump_summary().c_str());
 }
 
 void ATM90E32Component::clear_power_offset_calibrations() {
-  for (uint8_t phase = 0; phase < 3; phase++) {
-    this->write_power_offsets_to_registers_(phase, 0, 0);
+  if (!this->restored_power_offset_calibration_) {
+    ESP_LOGI(TAG,
+             "[CALIBRATION][%s] No stored power offsets to clear. Current values:", this->cs_->dump_summary().c_str());
+    for (uint8_t phase = 0; phase < 3; phase++) {
+      ESP_LOGI(TAG, "[CALIBRATION][%s]   Phase %c - offset_active_power: %d, offset_reactive_power: %d",
+               this->cs_->dump_summary().c_str(), 'A' + phase, this->power_offset_phase_[phase].active_power_offset,
+               this->power_offset_phase_[phase].reactive_power_offset);
+    }
+    return;
   }
 
-  this->power_offset_pref_.save(&this->power_offset_phase_);
+  ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored power offsets and restoring config-defined values",
+           this->cs_->dump_summary().c_str());
+
+  for (uint8_t phase = 0; phase < 3; phase++) {
+    int16_t active_offset =
+        this->has_config_active_power_offset_[phase] ? this->config_power_offset_phase_[phase].active_power_offset : 0;
+    int16_t reactive_offset = this->has_config_reactive_power_offset_[phase]
+                                  ? this->config_power_offset_phase_[phase].reactive_power_offset
+                                  : 0;
+    this->write_power_offsets_to_registers_(phase, active_offset, reactive_offset);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Phase %c - offset_active_power: %d, offset_reactive_power: %d",
+             this->cs_->dump_summary().c_str(), 'A' + phase, active_offset, reactive_offset);
+  }
+
+  PowerOffsetCalibration zero_power_offsets[3]{{0, 0}, {0, 0}, {0, 0}};
+  this->power_offset_pref_.save(&zero_power_offsets);
   global_preferences->sync();
+
+  this->restored_power_offset_calibration_ = false;
+  for (bool &phase : this->power_offset_calibration_mismatch_)
+    phase = false;
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] Power offsets cleared.", this->cs_->dump_summary().c_str());
 }
