@@ -951,8 +951,7 @@ void ATM90E32Component::clear_offset_calibrations() {
              this->cs_->dump_summary().c_str(), 'A' + phase, voltage_offset, current_offset);
   }
 
-  this->offset_pref_.save(&this->offset_phase_);
-  global_preferences->sync();
+  // No values saved to flash when clearing offset calibrations
   this->restored_offset_calibration_ = false;
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] Offsets cleared.", this->cs_->dump_summary().c_str());
@@ -982,8 +981,7 @@ void ATM90E32Component::clear_power_offset_calibrations() {
              this->cs_->dump_summary().c_str(), 'A' + phase, active_offset, reactive_offset);
   }
 
-  this->power_offset_pref_.save(&this->power_offset_phase_);
-  global_preferences->sync();
+  // No values saved to flash when clearing power offset calibrations
   this->restored_power_offset_calibration_ = false;
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] Power offsets cleared.", this->cs_->dump_summary().c_str());
