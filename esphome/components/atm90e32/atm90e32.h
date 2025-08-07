@@ -141,7 +141,7 @@ class ATM90E32Component : public PollingComponent,
 #endif
   uint16_t read16_(uint16_t a_register);
   int read32_(uint16_t addr_h, uint16_t addr_l);
-  void write16_(uint16_t a_register, uint16_t val);
+  void write16_(uint16_t a_register, uint16_t val, bool validate = true);
   float get_local_phase_voltage_(uint8_t phase);
   float get_local_phase_current_(uint8_t phase);
   float get_local_phase_active_power_(uint8_t phase);
