@@ -821,6 +821,7 @@ void ATM90E32Component::restore_gain_calibrations_() {
   this->using_saved_calibrations_ = false;
   for (uint8_t i = 0; i < 3; ++i)
     this->gain_phase_[i] = this->config_gain_phase_[i];
+  this->write_gains_to_registers_();
   ESP_LOGW(TAG, "[CALIBRATION][%s] No stored gain calibrations found. Using config file values.",
            this->cs_->dump_summary().c_str());
 }
@@ -925,9 +926,11 @@ void ATM90E32Component::clear_gain_calibrations() {
            this->cs_->dump_summary().c_str());
 
   for (int phase = 0; phase < 3; phase++) {
-    uint16_t voltage_gain = this->config_gain_phase_[phase].voltage_gain;
-    uint16_t current_gain = this->config_gain_phase_[phase].current_gain;
+    uint16_t voltage_gain = this->phase_[phase].voltage_gain_;
+    uint16_t current_gain = this->phase_[phase].ct_gain_;
 
+    this->config_gain_phase_[phase].voltage_gain = voltage_gain;
+    this->config_gain_phase_[phase].current_gain = current_gain;
     this->gain_phase_[phase].voltage_gain = voltage_gain;
     this->gain_phase_[phase].current_gain = current_gain;
 
