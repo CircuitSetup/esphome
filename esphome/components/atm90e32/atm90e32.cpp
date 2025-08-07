@@ -809,8 +809,7 @@ void ATM90E32Component::restore_gain_calibrations_() {
     } else {
       // Stored values match config; treat as if no calibration was stored
       this->using_saved_calibrations_ = false;
-      ESP_LOGI(TAG,
-               "[CALIBRATION][%s] Stored gain calibrations match config file values. Using config file values.",
+      ESP_LOGI(TAG, "[CALIBRATION][%s] Stored gain calibrations match config file values. Using config file values.",
                this->cs_->dump_summary().c_str());
       // Ensure registers have config values
       for (uint8_t phase = 0; phase < 3; ++phase)
