@@ -136,9 +136,9 @@ void ATM90E32Component::setup() {
     mmode0 |= 0 << 1;  // sets 1st bit to 0, phase b is not counted into the all-phase sum energy/power (P/Q/S)
   }
 
-  this->write16_(ATM90E32_REGISTER_SOFTRESET, 0x789A);    // Perform soft reset
-  delay(6);                                               // Wait for the minimum 5ms + 1ms
-  this->write16_(ATM90E32_REGISTER_CFGREGACCEN, 0x55AA);  // enable register config access
+  this->write16_(ATM90E32_REGISTER_SOFTRESET, 0x789A, false);  // Perform soft reset
+  delay(6);                                                    // Wait for the minimum 5ms + 1ms
+  this->write16_(ATM90E32_REGISTER_CFGREGACCEN, 0x55AA);       // enable register config access
   if (!this->validate_spi_read_(0x55AA, "setup()")) {
     ESP_LOGW(TAG, "Could not initialize ATM90E32 IC, check SPI settings");
     this->mark_failed();
@@ -417,7 +417,7 @@ int ATM90E32Component::read32_(uint16_t addr_h, uint16_t addr_l) {
   return val;
 }
 
-void ATM90E32Component::write16_(uint16_t a_register, uint16_t val) {
+void ATM90E32Component::write16_(uint16_t a_register, uint16_t val, bool validate) {
   ESP_LOGVV(TAG, "write16_ 0x%04" PRIX16 " val 0x%04" PRIX16, a_register, val);
   this->enable();
   delay_microseconds_safe(1);  // ensure CS setup time
@@ -426,7 +426,8 @@ void ATM90E32Component::write16_(uint16_t a_register, uint16_t val) {
   delay_microseconds_safe(1);  // allow clock to settle before raising CS
   this->disable();
   delay_microseconds_safe(1);  // ensure minimum CS high time
-  this->validate_spi_read_(val, "write16()");
+  if (validate)
+    this->validate_spi_read_(val, "write16()");
 }
 
 float ATM90E32Component::get_local_phase_voltage_(uint8_t phase) { return this->phase_[phase].voltage_; }
@@ -822,6 +823,7 @@ void ATM90E32Component::restore_gain_calibrations_() {
   for (uint8_t i = 0; i < 3; ++i)
     this->gain_phase_[i] = this->config_gain_phase_[i];
   this->write_gains_to_registers_();
+
   ESP_LOGW(TAG, "[CALIBRATION][%s] No stored gain calibrations found. Using config file values.",
            this->cs_->dump_summary().c_str());
 }
