@@ -925,10 +925,8 @@ void ATM90E32Component::clear_gain_calibrations() {
            this->cs_->dump_summary().c_str());
 
   for (int phase = 0; phase < 3; phase++) {
-    uint16_t voltage_gain =
-        this->has_config_voltage_gain_[phase] ? this->config_gain_phase_[phase].voltage_gain : 32768;
-    uint16_t current_gain = this->has_config_current_gain_[phase] ? this->config_gain_phase_[phase].current_gain
-                                                                  : this->phase_[phase].ct_gain_;
+    uint16_t voltage_gain = this->config_gain_phase_[phase].voltage_gain;
+    uint16_t current_gain = this->config_gain_phase_[phase].current_gain;
 
     this->gain_phase_[phase].voltage_gain = voltage_gain;
     this->gain_phase_[phase].current_gain = current_gain;
