@@ -931,10 +931,14 @@ void ATM90E32Component::clear_gain_calibrations() {
              this->gain_phase_[phase].current_gain);
   }
 
-  GainCalibration zero_gains[3] = {};
+  GainCalibration zero_gains[3]{{0, 0}, {0, 0}, {0, 0}};
   bool success = this->gain_calibration_pref_.save(&zero_gains);
   global_preferences->sync();
+
   this->using_saved_calibrations_ = false;
+  this->restored_gain_calibration_ = false;
+  for (uint8_t phase = 0; phase < 3; phase++)
+    this->gain_calibration_mismatch_[phase] = false;
 
   if (!success) {
     ESP_LOGE(TAG, "[CALIBRATION][%s] Failed to clear gain calibrations!", this->cs_->dump_summary().c_str());
@@ -955,7 +959,8 @@ void ATM90E32Component::clear_offset_calibrations() {
     return;
   }
 
-  ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored offset calibrations.", this->cs_->dump_summary().c_str());
+  ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored offset calibrations and restoring config-defined values",
+           this->cs_->dump_summary().c_str());
 
   for (uint8_t phase = 0; phase < 3; phase++) {
     int16_t voltage_offset =
@@ -967,10 +972,13 @@ void ATM90E32Component::clear_offset_calibrations() {
              this->cs_->dump_summary().c_str(), 'A' + phase, voltage_offset, current_offset);
   }
 
-  OffsetCalibration zero_offsets[3] = {};
+  OffsetCalibration zero_offsets[3]{{0, 0}, {0, 0}, {0, 0}};
   this->offset_pref_.save(&zero_offsets);  // Clear stored values in flash
   global_preferences->sync();
+
   this->restored_offset_calibration_ = false;
+  for (uint8_t phase = 0; phase < 3; phase++)
+    this->offset_calibration_mismatch_[phase] = false;
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] Offsets cleared.", this->cs_->dump_summary().c_str());
 }
@@ -987,7 +995,8 @@ void ATM90E32Component::clear_power_offset_calibrations() {
     return;
   }
 
-  ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored power offsets.", this->cs_->dump_summary().c_str());
+  ESP_LOGI(TAG, "[CALIBRATION][%s] Clearing stored power offsets and restoring config-defined values",
+           this->cs_->dump_summary().c_str());
 
   for (uint8_t phase = 0; phase < 3; phase++) {
     int16_t active_offset =
@@ -1000,10 +1009,13 @@ void ATM90E32Component::clear_power_offset_calibrations() {
              this->cs_->dump_summary().c_str(), 'A' + phase, active_offset, reactive_offset);
   }
 
-  PowerOffsetCalibration zero_power_offsets[3] = {};
+  PowerOffsetCalibration zero_power_offsets[3]{{0, 0}, {0, 0}, {0, 0}};
   this->power_offset_pref_.save(&zero_power_offsets);
   global_preferences->sync();
+
   this->restored_power_offset_calibration_ = false;
+  for (uint8_t phase = 0; phase < 3; phase++)
+    this->power_offset_calibration_mismatch_[phase] = false;
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] Power offsets cleared.", this->cs_->dump_summary().c_str());
 }
