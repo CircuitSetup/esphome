@@ -243,8 +243,8 @@ void ATM90E32Component::setup() {
           ESP_LOGW(TAG,
                    "[CALIBRATION][%s] ------------------------------------------------------------------------------",
                    cs);
-          ESP_LOGW(TAG, "[CALIBRATION][%s] | Phase |    offset_voltage    |     offset_current     |", cs);
-          ESP_LOGW(TAG, "[CALIBRATION][%s] |       |  config |  flash  |  config |  flash  |", cs);
+          ESP_LOGW(TAG, "[CALIBRATION][%s] | Phase |   offset_voltage   |   offset_current   |", cs);
+          ESP_LOGW(TAG, "[CALIBRATION][%s] |       |  config  |  flash  |  config  |  flash  |", cs);
           ESP_LOGW(TAG,
                    "[CALIBRATION][%s] ------------------------------------------------------------------------------",
                    cs);
@@ -265,8 +265,8 @@ void ATM90E32Component::setup() {
           ESP_LOGW(TAG,
                    "[CALIBRATION][%s] ------------------------------------------------------------------------------",
                    cs);
-          ESP_LOGW(TAG, "[CALIBRATION][%s] | Phase |  offset_active_power  | offset_reactive_power |", cs);
-          ESP_LOGW(TAG, "[CALIBRATION][%s] |       |  config |  flash  |  config |  flash  |", cs);
+          ESP_LOGW(TAG, "[CALIBRATION][%s] | Phase | offset_active_power|offset_reactive_power|", cs);
+          ESP_LOGW(TAG, "[CALIBRATION][%s] |       |  config  |  flash  |  config  |  flash  |", cs);
           ESP_LOGW(TAG,
                    "[CALIBRATION][%s] ------------------------------------------------------------------------------",
                    cs);
@@ -289,8 +289,8 @@ void ATM90E32Component::setup() {
           ESP_LOGW(TAG,
                    "[CALIBRATION][%s] ------------------------------------------------------------------------------",
                    cs);
-          ESP_LOGW(TAG, "[CALIBRATION][%s] | Phase |   voltage_gain   |   current_gain   |", cs);
-          ESP_LOGW(TAG, "[CALIBRATION][%s] |       |  config | flash |  config | flash |", cs);
+          ESP_LOGW(TAG, "[CALIBRATION][%s] | Phase |    voltage_gain    |    current_gain    |", cs);
+          ESP_LOGW(TAG, "[CALIBRATION][%s] |       |  config  |  flash  |  config  |  flash  |", cs);
           ESP_LOGW(TAG,
                    "[CALIBRATION][%s] ------------------------------------------------------------------------------",
                    cs);
