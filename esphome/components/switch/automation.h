@@ -37,6 +37,23 @@ template<typename... Ts> class ToggleAction : public Action<Ts...> {
   Switch *switch_;
 };
 
+template<typename... Ts> class ControlAction : public Action<Ts...> {
+ public:
+  explicit ControlAction(Switch *a_switch) : switch_(a_switch) {}
+
+  TEMPLATABLE_VALUE(bool, state)
+
+  void play(Ts... x) override {
+    auto state = this->state_.optional_value(x...);
+    if (state.has_value()) {
+      this->switch_->control(*state);
+    }
+  }
+
+ protected:
+  Switch *switch_;
+};
+
 template<typename... Ts> class SwitchCondition : public Condition<Ts...> {
  public:
   SwitchCondition(Switch *parent, bool state) : parent_(parent), state_(state) {}
