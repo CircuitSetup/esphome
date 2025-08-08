@@ -195,7 +195,7 @@ void ATM90E32Component::setup() {
       }
     }
   } else {
-    ESP_LOGI(TAG, "[CALIBRATION][%s] Gain calibration is disabled. Using config file values.", 
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Gain calibration is disabled. Using config file values.",
              this->cs_->dump_summary().c_str());
     for (uint8_t phase = 0; phase < 3; ++phase) {
       this->write16_(voltage_gain_registers[phase], this->phase_[phase].voltage_gain_);
