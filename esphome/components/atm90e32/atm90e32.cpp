@@ -168,7 +168,8 @@ void ATM90E32Component::setup() {
     this->power_offset_pref_ = global_preferences->make_preference<PowerOffsetCalibration[3]>(po_hash, true);
     this->restore_power_offset_calibrations_();
   } else {
-    ESP_LOGI(TAG, "Power & Voltage/Current offset calibration is disabled, using config file values.");
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Power & Voltage/Current offset calibration is disabled. Using config file values.",
+             this->cs_->dump_summary().c_str());
     for (uint8_t phase = 0; phase < 3; ++phase) {
       this->write16_(this->voltage_offset_registers[phase],
                      static_cast<uint16_t>(this->offset_phase_[phase].voltage_offset_));
@@ -194,7 +195,8 @@ void ATM90E32Component::setup() {
       }
     }
   } else {
-    ESP_LOGI(TAG, "Gain calibration is disabled, using config file values.");
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Gain calibration is disabled. Using config file values.", 
+             this->cs_->dump_summary().c_str());
     for (uint8_t phase = 0; phase < 3; ++phase) {
       this->write16_(voltage_gain_registers[phase], this->phase_[phase].voltage_gain_);
       this->write16_(current_gain_registers[phase], this->phase_[phase].ct_gain_);
