@@ -262,9 +262,7 @@ void ATM90E32Component::setup() {
           }
           ESP_LOGW(
               TAG,
-              "[CALIBRATION][%s] ==================================================================================================
-              ",
-              cs);
+              "[CALIBRATION][%s] ===============================================================================", cs);
         }
         if (power_mismatch) {
           ESP_LOGW(TAG, "[CALIBRATION][%s] ", cs);
@@ -296,9 +294,7 @@ void ATM90E32Component::setup() {
           }
           ESP_LOGW(
               TAG,
-              "[CALIBRATION][%s] ===============================================================================================================
-              ",
-              cs);
+              "[CALIBRATION][%s] ===============================================================================", cs);
         }
         if (gain_mismatch) {
           ESP_LOGW(TAG, "[CALIBRATION][%s] ", cs);
@@ -325,10 +321,9 @@ void ATM90E32Component::setup() {
                 this->config_gain_phase_[phase].current_gain, this->gain_phase_[phase].voltage_gain,
                 this->gain_phase_[phase].current_gain);
           }
-          ESP_LOGW(TAG,
-                   "[CALIBRATION][%s] =================================================================================
-                   ",
-                   cs);
+          ESP_LOGW(
+              TAG,
+              "[CALIBRATION][%s] ===============================================================================", cs);
         }
         if (!this->enable_offset_calibration_) {
           ESP_LOGI(
@@ -376,7 +371,8 @@ void ATM90E32Component::setup() {
             ESP_LOGI(TAG, "[CALIBRATION][%s] |   %c   |    %6u    |    %6u    |", cs, 'A' + phase,
                      this->gain_phase_[phase].voltage_gain, this->gain_phase_[phase].current_gain);
           }
-          ESP_LOGI(TAG, "[CALIBRATION][%s] =====================================================================", cs);
+          ESP_LOGI(TAG, "[CALIBRATION][%s] =====================================================================\\n",
+                   cs);
           ESP_LOGI(TAG, "[CALIBRATION][%s] Gain calibration loaded and verified successfully.\n", cs);
         }
         this->calibration_message_printed_ = true;
