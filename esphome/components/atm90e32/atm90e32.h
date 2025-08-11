@@ -174,7 +174,9 @@ class ATM90E32Component : public PollingComponent,
   void restore_offset_calibrations_();
   void restore_power_offset_calibrations_();
   void restore_gain_calibrations_();
+  void save_offset_calibration_to_memory_();
   void save_gain_calibration_to_memory_();
+  void save_power_offset_calibration_to_memory_();
   void write_offsets_to_registers_(uint8_t phase, int16_t voltage_offset, int16_t current_offset);
   void write_power_offsets_to_registers_(uint8_t phase, int16_t p_offset, int16_t q_offset);
   void write_gains_to_registers_();

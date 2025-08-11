@@ -700,6 +700,38 @@ void ATM90E32Component::save_gain_calibration_to_memory_() {
   }
 }
 
+void ATM90E32Component::save_offset_calibration_to_memory_() {
+  const char *cs = this->cs_summary_.c_str();
+  bool success = this->offset_pref_.save(&this->offset_phase_);
+  global_preferences->sync();
+  if (success) {
+    this->using_saved_calibrations_ = true;
+    this->restored_offset_calibration_ = true;
+    for (bool &phase : this->offset_calibration_mismatch_)
+      phase = false;
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Offset calibration saved to memory.", cs);
+  } else {
+    this->using_saved_calibrations_ = false;
+    ESP_LOGE(TAG, "[CALIBRATION][%s] Failed to save offset calibration to memory!", cs);
+  }
+}
+
+void ATM90E32Component::save_power_offset_calibration_to_memory_() {
+  const char *cs = this->cs_summary_.c_str();
+  bool success = this->power_offset_pref_.save(&this->power_offset_phase_);
+  global_preferences->sync();
+  if (success) {
+    this->using_saved_calibrations_ = true;
+    this->restored_power_offset_calibration_ = true;
+    for (bool &phase : this->power_offset_calibration_mismatch_)
+      phase = false;
+    ESP_LOGI(TAG, "[CALIBRATION][%s] Power offset calibration saved to memory.", cs);
+  } else {
+    this->using_saved_calibrations_ = false;
+    ESP_LOGE(TAG, "[CALIBRATION][%s] Failed to save power offset calibration to memory!", cs);
+  }
+}
+
 void ATM90E32Component::run_offset_calibrations() {
   const char *cs = this->cs_summary_.c_str();
   if (!this->enable_offset_calibration_) {
@@ -727,8 +759,7 @@ void ATM90E32Component::run_offset_calibrations() {
 
   ESP_LOGI(TAG, "[CALIBRATION][%s] ==================================================================\n", cs);
 
-  this->offset_pref_.save(&this->offset_phase_);  // Save to flash
-  global_preferences->sync();
+  this->save_offset_calibration_to_memory_();
 }
 
 void ATM90E32Component::run_power_offset_calibrations() {
@@ -756,11 +787,9 @@ void ATM90E32Component::run_power_offset_calibrations() {
     ESP_LOGI(TAG, "[CALIBRATION][%s] |   %c   |       %6d        |        %6d        |", cs, 'A' + phase, active_offset,
              reactive_offset);
   }
-
   ESP_LOGI(TAG, "[CALIBRATION][%s] =====================================================================\n", cs);
 
-  this->power_offset_pref_.save(&this->power_offset_phase_);  // Save to flash
-  global_preferences->sync();
+  this->save_power_offset_calibration_to_memory_();
 }
 
 void ATM90E32Component::write_gains_to_registers_() {
@@ -1097,16 +1126,16 @@ int16_t ATM90E32Component::calibrate_offset(uint8_t phase, bool voltage) {
 
 int16_t ATM90E32Component::calibrate_power_offset(uint8_t phase, bool reactive) {
   const uint8_t num_reads = 5;
-  uint64_t total_value = 0;
+  int64_t total_value = 0;
 
   for (uint8_t i = 0; i < num_reads; ++i) {
-    uint32_t reading = reactive ? this->read32_(ATM90E32_REGISTER_QMEAN + phase, ATM90E32_REGISTER_QMEANLSB + phase)
-                                : this->read32_(ATM90E32_REGISTER_PMEAN + phase, ATM90E32_REGISTER_PMEANLSB + phase);
+    int32_t reading = reactive ? this->read32_(ATM90E32_REGISTER_QMEAN + phase, ATM90E32_REGISTER_QMEANLSB + phase)
+                               : this->read32_(ATM90E32_REGISTER_PMEAN + phase, ATM90E32_REGISTER_PMEANLSB + phase);
     total_value += reading;
   }
 
-  const uint32_t average_value = total_value / num_reads;
-  const uint32_t power_offset = ~average_value + 1;
+  int32_t average_value = total_value / num_reads;
+  int32_t power_offset = -average_value;
   return static_cast<int16_t>(power_offset);  // Takes the lower 16 bits
 }
 
