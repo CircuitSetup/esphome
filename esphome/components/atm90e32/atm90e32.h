@@ -246,6 +246,7 @@ class ATM90E32Component : public PollingComponent,
   ESPPreferenceObject offset_pref_;
   ESPPreferenceObject power_offset_pref_;
   ESPPreferenceObject gain_calibration_pref_;
+  std::string cs_summary_;
 
   sensor::Sensor *freq_sensor_{nullptr};
 #ifdef USE_TEXT_SENSOR
