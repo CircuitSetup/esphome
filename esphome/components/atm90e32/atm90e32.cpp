@@ -408,7 +408,7 @@ uint16_t ATM90E32Component::read16_transaction_(uint16_t a_register) {
   uint8_t addrl = (a_register & 0xFF);
   uint8_t data[4] = {addrh, addrl, 0x00, 0x00};
   this->transfer_array(data, 4);
-  uint16_t output = (uint16_t(data[2] & 0xFF) << 8) | (data[3] & 0xFF);
+  uint16_t output = encode_uint16(data[2], data[3]);
   ESP_LOGVV(TAG, "read16_ 0x%04" PRIX16 " output 0x%04" PRIX16, a_register, output);
   return output;
 }
