@@ -376,6 +376,16 @@ void ATM90E32Component::log_calibration_status_() {
                this->offset_phase_[phase].first_offset, this->offset_phase_[phase].second_offset);
     }
     ESP_LOGI(TAG, "[CALIBRATION][%s] ==============================================================\\n", cs);
+  } else if (!this->has_stored_offset_calibration_) {
+    ESP_LOGW(TAG, "[CALIBRATION][%s] No stored offset calibrations found. Using default values.", cs);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] --------------------------------------------------------------", cs);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] | Phase | offset_voltage | offset_current |", cs);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] --------------------------------------------------------------", cs);
+    for (uint8_t phase = 0; phase < 3; phase++) {
+      ESP_LOGI(TAG, "[CALIBRATION][%s] |   %c   |     %6d      |     %6d      |", cs, 'A' + phase,
+               this->config_offset_phase_[phase].first_offset, this->config_offset_phase_[phase].second_offset);
+    }
+    ESP_LOGI(TAG, "[CALIBRATION][%s] ==============================================================\\n", cs);
   }
 
   if (this->restored_power_offset_calibration_ && !power_mismatch) {
@@ -389,6 +399,17 @@ void ATM90E32Component::log_calibration_status_() {
                this->power_offset_phase_[phase].first_offset, this->power_offset_phase_[phase].second_offset);
     }
     ESP_LOGI(TAG, "[CALIBRATION][%s] =====================================================================\n", cs);
+  } else if (!this->has_stored_power_offset_calibration_) {
+    ESP_LOGW(TAG, "[CALIBRATION][%s] No stored power offset calibrations found. Using default values.", cs);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] ---------------------------------------------------------------------", cs);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] | Phase | offset_active_power | offset_reactive_power |", cs);
+    ESP_LOGI(TAG, "[CALIBRATION][%s] ---------------------------------------------------------------------", cs);
+    for (uint8_t phase = 0; phase < 3; phase++) {
+      ESP_LOGI(TAG, "[CALIBRATION][%s] |   %c   |       %6d        |        %6d        |", cs, 'A' + phase,
+               this->config_power_offset_phase_[phase].first_offset,
+               this->config_power_offset_phase_[phase].second_offset);
+    }
+    ESP_LOGI(TAG, "[CALIBRATION][%s] =====================================================================\\n", cs);
   }
   if (!this->enable_gain_calibration_) {
     ESP_LOGI(TAG, "[CALIBRATION][%s] Gain calibration is disabled. Using config file values.", cs);
@@ -451,7 +472,9 @@ void ATM90E32Component::dump_config() {
   LOG_SENSOR("  ", "Frequency", this->freq_sensor_);
   LOG_SENSOR("  ", "Chip Temp", this->chip_temperature_sensor_);
   if (this->restored_offset_calibration_ || this->restored_power_offset_calibration_ ||
-      this->restored_gain_calibration_ || !this->enable_offset_calibration_ || !this->enable_gain_calibration_) {
+      this->restored_gain_calibration_ || !this->enable_offset_calibration_ || !this->enable_gain_calibration_ ||
+      (this->enable_offset_calibration_ &&
+       (!this->has_stored_offset_calibration_ || !this->has_stored_power_offset_calibration_))) {
     this->log_calibration_status_();
   }
 }
